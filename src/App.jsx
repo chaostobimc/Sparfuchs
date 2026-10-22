@@ -13,10 +13,7 @@ import {
   CircleDollarSign,
   Gift,
   Heart,
-  Info,
   LayoutDashboard,
-  Lightbulb,
-  LockKeyhole,
   Menu,
   PiggyBank,
   Plus,
@@ -55,99 +52,22 @@ function toISODate(date) {
   return `${year}-${month}-${day}`;
 }
 
-function dateInPastDays(days, now = new Date()) {
-  const date = new Date(now);
-  date.setHours(12, 0, 0, 0);
-  date.setDate(date.getDate() - days);
-  return toISODate(date);
-}
-
-function dateInPastMonth(monthsAgo, day, now = new Date()) {
-  const date = new Date(now.getFullYear(), now.getMonth() - monthsAgo, day, 12);
-  return toISODate(date);
-}
-
-function createDemoEntries(now = new Date()) {
-  const recent = [
-    [1.0, 'Ein Euro auf dem Gehweg gefunden', 'Sonstiges', 'Fundstück', 0],
-    [8.4, 'Cashback beim Wocheneinkauf', 'REWE', 'Cashback', 1],
-    [4.99, 'App-Coupon eingelöst', 'dm', 'Rabatt', 2],
-    [6.5, 'Lidl Plus Coupon genutzt', 'Lidl', 'Rabatt', 4],
-    [2.3, 'Pfandgeld zurückbekommen', 'Sonstiges', 'Fundstück', 7],
-    [12, 'Cashback gutgeschrieben', 'ALDI SÜD', 'Cashback', 9],
-    [3.75, 'App-Coupon beim Einkauf', 'Rossmann', 'Rabatt', 12],
-    [7.5, 'Gratisartikel mitgenommen', 'Kaufland', 'Gratisartikel', 15],
-    [18.5, 'Cashback-Aktion genutzt', 'Sonstiges', 'Cashback', 20],
-    [5.2, 'Wochenangebot genutzt', 'EDEKA', 'Rabatt', 25],
-  ].map(([amount, title, store, type, daysAgo], index) => ({
-    id: `demo-recent-${index}`,
-    amount,
-    title,
-    store,
-    type,
-    date: dateInPastDays(daysAgo, now),
-    note: '',
-  }));
-
-  const pastMonths = [
-    [34.5, 19.1],
-    [41.2, 12.8],
-    [31.4, 15.5],
-    [46.3, 18.2],
-    [38.75, 17.5],
-    [29.8, 15.4],
-    [48.2, 18.6],
-    [36.4, 13.8],
-    [54.3, 16.9],
-    [41.7, 13.1],
-    [47.5, 19.4],
-  ];
-  const history = pastMonths.flatMap(([first, second], index) => {
-    const monthsAgo = index + 1;
-    const firstStore = STORES[(index + 1) % (STORES.length - 1)];
-    const secondStore = STORES[(index + 3) % (STORES.length - 1)];
-    return [
-      {
-        id: `demo-history-${monthsAgo}-a`,
-        amount: first,
-        title: `${firstStore}-Aktion genutzt`,
-        store: firstStore,
-        type: monthsAgo % 2 ? 'Cashback' : 'Rabatt',
-        date: dateInPastMonth(monthsAgo, 6, now),
-        note: '',
-      },
-      {
-        id: `demo-history-${monthsAgo}-b`,
-        amount: second,
-        title: 'Einkauf clever geplant',
-        store: secondStore,
-        type: monthsAgo % 3 ? 'Rabatt' : 'Cashback',
-        date: dateInPastMonth(monthsAgo, 19, now),
-        note: '',
-      },
-    ];
-  });
-  return [...recent, ...history].sort((a, b) => b.date.localeCompare(a.date));
-}
-
 function loadInitialData() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
+      const storedEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+      const entries = storedEntries.filter((entry) => !String(entry?.id ?? '').startsWith('demo-'));
+      const savedGoal = Number(parsed.goalTarget);
       return {
-        entries: Array.isArray(parsed.entries) ? parsed.entries : [],
-        goalTarget: Number(parsed.goalTarget) > 0 ? Number(parsed.goalTarget) : 100,
-        demoMode: Boolean(parsed.demoMode),
+        entries,
+        goalTarget: entries.length === 0 && savedGoal === 100 ? 0 : (savedGoal > 0 ? savedGoal : 0),
       };
     }
   } catch {
   }
-  return {
-    entries: createDemoEntries(),
-    goalTarget: 100,
-    demoMode: true,
-  };
+  return { entries: [], goalTarget: 0 };
 }
 
 function formatMoney(amount) {
@@ -239,7 +159,6 @@ function App() {
   const [initialData] = useState(() => loadInitialData());
   const [entries, setEntries] = useState(initialData.entries);
   const [goalTarget, setGoalTarget] = useState(initialData.goalTarget);
-  const [demoMode, setDemoMode] = useState(initialData.demoMode);
   const [page, setPage] = useState('dashboard');
   const [now, setNow] = useState(() => new Date());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -294,11 +213,11 @@ function App() {
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ entries, goalTarget, demoMode }),
+        JSON.stringify({ entries, goalTarget }),
       );
     } catch {
     }
-  }, [entries, goalTarget, demoMode]);
+  }, [entries, goalTarget]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -361,11 +280,6 @@ function App() {
     showToast('Eintrag entfernt.');
   }
 
-  function removeDemoEntries() {
-    setEntries((current) => current.filter((entry) => !String(entry.id).startsWith('demo-')));
-    setDemoMode(false);
-    showToast('Beispielwerte entfernt – jetzt ist dein Sparbuch bereit.');
-  }
 
   return (
     <div className="app-shell">
@@ -407,13 +321,6 @@ function App() {
             </div>
           </header>
 
-          {demoMode && (
-            <div className="demo-notice">
-              <div className="demo-notice-icon"><Info size={17} /></div>
-              <p><strong>Das sind Beispielwerte</strong><span> – keine echten Buchungen. Entferne sie, sobald dein eigenes Sparbuch startet.</span></p>
-              <button onClick={removeDemoEntries}><Trash2 size={15} /> Beispielwerte entfernen</button>
-            </div>
-          )}
 
           <div key={page} className="page-view">
             {page === 'dashboard' && (
@@ -537,11 +444,6 @@ function Sidebar({ page, onNavigate }) {
       </nav>
 
       <div className="sidebar-spacer" />
-      <div className="sidebar-tip">
-        <div className="tip-icon"><LockKeyhole size={17} /></div>
-        <span className="tip-kicker">LOKAL GESPEICHERT</span>
-        <p>Deine Einträge bleiben in diesem Browser.</p>
-      </div>
       <div className="sidebar-profile">
         <div className="profile-avatar">S</div>
         <div className="profile-copy"><strong>Dein Sparbuch</strong><span>Persönliche Übersicht</span></div>
@@ -577,11 +479,6 @@ function MobileDrawer({ page, isOpen, onNavigate, onClose }) {
               {page === id && <span className="drawer-active-indicator" />}
             </button>
           ))}
-        </div>
-        <div className="mobile-drawer-spacer" />
-        <div className="drawer-storage-note">
-          <span className="drawer-storage-icon"><LockKeyhole size={16} /></span>
-          <span><strong>Lokal gespeichert</strong><small>Deine Einträge bleiben in diesem Browser.</small></span>
         </div>
       </nav>
     </div>
@@ -669,7 +566,7 @@ function DashboardPage(props) {
         </section>
 
         <section className="panel goal-panel">
-          <PanelHeading eyebrow="EIN KLEINES ZIEL" title="Dein Monatsziel" icon={Target} />
+          <PanelHeading eyebrow="MONATSZIEL" title="Dein Monatsziel" icon={Target} />
           <div className="goal-progress-row">
             <div className="goal-ring" style={{ background: `conic-gradient(#bd416f ${progress}%, #f8e8ef ${progress}% 100%)` }}>
               <div className="goal-ring-inner"><strong>{progress}%</strong><span>geschafft</span></div>
@@ -677,13 +574,13 @@ function DashboardPage(props) {
             <div className="goal-progress-copy">
               <span className="goal-this-month">{monthName} bisher</span>
               <strong>{formatMoney(totals.month)}</strong>
-              <span className="goal-target-copy">von {formatMoney(goalTarget)}</span>
+              <span className="goal-target-copy">{goalTarget > 0 ? `von ${formatMoney(goalTarget)}` : 'Noch kein Ziel gesetzt'}</span>
             </div>
           </div>
           <div className="goal-progress-track"><span style={{ width: `${progress}%` }} /></div>
           <p className="goal-encouragement">
             <span className="goal-encouragement-icon"><Sparkles size={15} /></span>
-            {progress >= 100 ? 'Geschafft! Du hast dein Monatsziel erreicht.' : `Noch ${formatMoney(Math.max(0, goalTarget - totals.month))} bis zu deinem Ziel.`}
+            {goalTarget > 0 ? (progress >= 100 ? 'Geschafft! Du hast dein Monatsziel erreicht.' : `Noch ${formatMoney(Math.max(0, goalTarget - totals.month))} bis zu deinem Ziel.`) : 'Lege ein Monatsziel fest.'}
           </p>
           <button className="text-link goal-edit-link" onClick={() => onNavigate('goals')}>Sparziel ansehen <ArrowRight size={15} /></button>
         </section>
@@ -761,7 +658,7 @@ function Sparkline({ values }) {
   const path = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point}`).join(' ');
   const last = points[points.length - 1]?.split(',') || ['0', '0'];
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Sparverlauf steigt an" className="sparkline">
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Sparverlauf der letzten Monate" className="sparkline">
       <path d={`${path} L ${width - 3} ${height - 1} L 3 ${height - 1} Z`} fill="rgba(255,255,255,0.1)" />
       <path d={path} fill="none" stroke="#f4c7d8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={last[0]} cy={last[1]} r="3" fill="#f8e5ed" stroke="#96385c" strokeWidth="1.5" />
@@ -904,8 +801,8 @@ function ActivityRow({ entry, now, full, onDelete }) {
 }
 
 function GoalsPage({ now, monthName, monthTotal, goalTarget, onGoalTargetChange, entries, progress }) {
-  const [targetInput, setTargetInput] = useState(String(goalTarget));
-  useEffect(() => setTargetInput(String(goalTarget)), [goalTarget]);
+  const [targetInput, setTargetInput] = useState(goalTarget > 0 ? String(goalTarget) : '');
+  useEffect(() => setTargetInput(goalTarget > 0 ? String(goalTarget) : ''), [goalTarget]);
   const milestones = [
     { value: 10, label: 'Erster Zehner', icon: Sparkles },
     { value: 50, label: 'Kleine Schritte', icon: Wallet },
@@ -927,13 +824,12 @@ function GoalsPage({ now, monthName, monthTotal, goalTarget, onGoalTargetChange,
           <div className="goal-detail-stamp"><Target size={22} /><span>Monats-<br />ziel</span></div>
         </div>
         <div className="goal-detail-progress-area">
-          <div className="goal-detail-numbers"><div><span>Bisher gespart</span><strong>{formatMoney(monthTotal)}</strong></div><span className="goal-detail-separator">von</span><div><span>Dein Monatsziel</span><strong>{formatMoney(goalTarget)}</strong></div></div>
+          <div className="goal-detail-numbers"><div><span>Bisher gespart</span><strong>{formatMoney(monthTotal)}</strong></div><span className="goal-detail-separator">von</span><div><span>Dein Monatsziel</span><strong>{goalTarget > 0 ? formatMoney(goalTarget) : 'Noch offen'}</strong></div></div>
           <div className="large-progress-track"><span style={{ width: `${progress}%` }} /></div>
           <div className="large-progress-labels"><span>{progress}% geschafft</span><span>{monthCount} {monthCount === 1 ? 'Spar-Moment' : 'Spar-Momente'} in {monthName}</span></div>
         </div>
-        <label className="goal-input-label" htmlFor="goal-target-input">Dein Monatsziel anpassen</label>
-        <div className="goal-input-wrap"><span>€</span><input id="goal-target-input" type="number" min="1" step="5" value={targetInput} onChange={(event) => setTargetInput(event.target.value)} onBlur={() => { const nextTarget = Number(targetInput); if (Number.isFinite(nextTarget) && nextTarget > 0) onGoalTargetChange(nextTarget); else setTargetInput(String(goalTarget)); }} /><span className="goal-input-hint">pro Monat</span></div>
-        <div className="goal-friendly-note"><Lightbulb size={17} /><span>Das Monatsziel wird auf diesem Gerät gespeichert und kann jederzeit angepasst werden.</span></div>
+        <label className="goal-input-label" htmlFor="goal-target-input">{goalTarget > 0 ? 'Dein Monatsziel anpassen' : 'Monatsziel festlegen'}</label>
+        <div className="goal-input-wrap"><span>€</span><input id="goal-target-input" type="number" min="1" step="5" value={targetInput} onChange={(event) => setTargetInput(event.target.value)} onBlur={() => { const nextTarget = Number(targetInput); if (Number.isFinite(nextTarget) && nextTarget > 0) onGoalTargetChange(nextTarget); else setTargetInput(goalTarget > 0 ? String(goalTarget) : ''); }} /><span className="goal-input-hint">pro Monat</span></div>
       </section>
 
       <section className="panel milestones-panel">
@@ -1002,10 +898,8 @@ function EntryModal({ draft, onClose, onSave }) {
             <span className="amount-suffix">EUR</span>
           </div>
           {amountError && <span className="field-error" id="amount-error">{amountError}</span>}
-          <div className="quick-amounts"><span>Direkt eintragen:</span>{['1,00', '2,50', '5,00'].map((value) => <button type="button" key={value} onClick={() => { setAmount(value); setAmountError(''); }}>+ {value} €</button>)}</div>
-
           <label className="form-label" htmlFor="entry-title">Wofür hast du gespart?</label>
-          <input className="form-input" id="entry-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="z. B. Geld auf dem Boden gefunden" required maxLength={80} />
+          <input className="form-input" id="entry-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Eintrag benennen" required maxLength={80} />
 
           <div className="form-two-columns">
             <div>
@@ -1029,7 +923,6 @@ function EntryModal({ draft, onClose, onSave }) {
             </div>
           </div>
           <button className="button-primary modal-submit" type="submit"><Plus size={17} /> Betrag ins Sparbuch legen</button>
-          <span className="modal-reassurance"><CheckCircle2 size={14} /> Deine Einträge bleiben privat auf diesem Gerät.</span>
         </form>
       </section>
     </div>

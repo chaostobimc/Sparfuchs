@@ -1,27 +1,47 @@
 # Sparschwein
 
-Ein persönliches, lokal gespeichertes Spar-Cockpit für Cashback, Rabatte, Gratisaktionen und kleine Fundstücke.
+Ein Spar-Cockpit zum Erfassen persönlicher Ersparnisse, Rabatte, Cashback-Beträge und Sparziele.
 
-## Starten
+## Web-App starten
 
 ```bash
 npm install
 npm run dev
 ```
 
-Für einen Produktionsbuild:
+Produktionsbuild:
 
 ```bash
 npm run build
 npm run preview
 ```
 
+## Flutter-App für Android und Windows
+
+Die Flutter-App liegt unter `sparschwein_flutter/`. Sie startet mit einem leeren Sparbuch und ohne voreingestelltes Monatsziel. Der Flutter-CLI-Befehl legt die nativen Android- und Windows-Runner an.
+
+```bash
+cd sparschwein_flutter
+flutter create --project-name sparschwein --platforms=android,windows --org de.sparschwein .
+flutter pub get
+flutter devices
+```
+
+Ausführen und bauen:
+
+```bash
+flutter run -d windows
+flutter run -d <android-device-id>
+flutter build windows
+flutter build apk --release
+```
+
 ## Funktionen
 
-- Sparbeträge mit Datum, Laden, Kategorie und Notiz eintragen
-- Gesamt-, Monats- und Jahresübersicht mit Verlauf und Monatsziel
-- Einträge nach Laden und Sparart filtern sowie durchsuchen
-- Einträge und Sparziel lokal im Browser speichern
-- Beispielwerte sind beim ersten Start sichtbar und lassen sich einzeln entfernen
+- Sparbeträge mit Datum, Laden, Sparart und Notiz erfassen
+- Gesamt-, Monats- und Jahresübersicht mit Verlauf und Sparziel
+- Einträge filtern, durchsuchen und entfernen
+- Eigene Monatsziele festlegen
+- Start ohne Beispielbuchungen
 
-Es gibt keinen Bereich für lokale Angebote oder nahe Rabatte. Die App ermittelt keinen Standort und sendet keine Einträge an einen Server.
+Es gibt keinen Bereich für lokale Angebote und keine Standortermittlung.
