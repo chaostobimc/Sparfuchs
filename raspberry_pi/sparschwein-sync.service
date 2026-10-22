@@ -1,0 +1,26 @@
+[Unit]
+Description=Sparschwein local network sync service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sparschwein-sync
+Group=sparschwein-sync
+WorkingDirectory=/opt/sparschwein-sync
+EnvironmentFile=/etc/sparschwein-sync.env
+Environment=SPARSCHWEIN_SYNC_HOST=0.0.0.0
+Environment=SPARSCHWEIN_SYNC_PORT=8765
+Environment=SPARSCHWEIN_SYNC_DATABASE=/var/lib/sparschwein-sync/sparschwein.sqlite3
+ExecStart=/usr/bin/python3 /opt/sparschwein-sync/server.py
+Restart=on-failure
+RestartSec=3
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sparschwein-sync
+
+[Install]
+WantedBy=multi-user.target

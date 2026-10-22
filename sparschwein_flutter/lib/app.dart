@@ -1,15 +1,25 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_theme.dart';
 import 'models/savings_entry.dart';
+import 'sync/sync_client.dart';
+import 'sync/sync_settings_dialog.dart';
 
 const _entriesStorageKey = 'sparschwein.entries.v1';
 const _goalStorageKey = 'sparschwein.monthly-goal.v1';
+const _syncOperationsStorageKey = 'sparschwein.sync.operations.v1';
+const _syncVersionsStorageKey = 'sparschwein.sync.versions.v1';
+const _syncHostStorageKey = 'sparschwein.sync.host.v1';
+const _syncLastSuccessStorageKey = 'sparschwein.sync.last-success.v1';
+const _syncTokenStorageKey = 'sparschwein.sync-token.v1';
 const _pageWidth = 1480.0;
 const _defaultStores = ['Alle Läden', ...savingsStores];
 const _typeFilters = ['Alle', ...savingsTypes];
@@ -76,12 +86,23 @@ class SparschweinApp extends StatefulWidget {
   State<SparschweinApp> createState() => _SparschweinAppState();
 }
 
-class _SparschweinAppState extends State<SparschweinApp> {
+class _SparschweinAppState extends State<SparschweinApp> with WidgetsBindingObserver {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _searchController = TextEditingController();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   List<SavingsEntry> _entries = [];
+  List<SyncOperation> _pendingSyncOperations = [];
+  Map<String, SyncVersion> _syncVersions = {};
   double _goalTarget = 0;
+  String _syncHost = '';
+  String _syncToken = '';
+  bool _isSyncing = false;
+  String? _syncError;
+  DateTime? _lastSuccessfulSync;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  Timer? _syncDebounce;
+  Timer? _syncRetryTimer;
   bool _isLoading = true;
   _AppPage _page = _AppPage.overview;
   String _activeTypeFilter = 'Alle';
@@ -91,13 +112,44 @@ class _SparschweinAppState extends State<SparschweinApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startNetworkListeners();
     _loadData();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _connectivitySubscription?.cancel();
+    _syncDebounce?.cancel();
+    _syncRetryTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _scheduleSync();
+  }
+
+  void _startNetworkListeners() {
+    try {
+      _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
+        (transports) {
+          if (transports.contains(ConnectivityResult.wifi) ||
+              transports.contains(ConnectivityResult.ethernet)) {
+            _scheduleSync();
+          }
+        },
+        onError: (_) {},
+      );
+    } catch (_) {
+      _syncError = 'Netzwerkstatus nicht verfügbar.';
+    }
+    _syncRetryTimer = Timer.periodic(
+      const Duration(seconds: 45),
+      (_) => _scheduleSync(),
+    );
   }
 
   Future<void> _loadData() async {
@@ -116,12 +168,59 @@ class _SparschweinAppState extends State<SparschweinApp> {
           .toList()
         ..sort((a, b) => b.date.compareTo(a.date));
       final goal = preferences.getDouble(_goalStorageKey) ?? 0;
+
+      var operations = <SyncOperation>[];
+      final rawOperations = preferences.getString(_syncOperationsStorageKey);
+      if (rawOperations != null) {
+        try {
+          operations = (jsonDecode(rawOperations) as List<dynamic>)
+              .map((item) => SyncOperation.fromJson(
+                    Map<String, dynamic>.from(item as Map),
+                  ))
+              .toList();
+        } catch (_) {
+          operations = [];
+        }
+      }
+
+      var versions = <String, SyncVersion>{};
+      final rawVersions = preferences.getString(_syncVersionsStorageKey);
+      if (rawVersions != null) {
+        try {
+          final decodedVersions =
+              Map<String, dynamic>.from(jsonDecode(rawVersions) as Map);
+          versions = decodedVersions.map(
+            (key, value) => MapEntry(
+              key,
+              SyncVersion.fromJson(Map<String, dynamic>.from(value as Map)),
+            ),
+          );
+        } catch (_) {
+          versions = {};
+        }
+      }
+
+      String? syncToken;
+      try {
+        syncToken = await _secureStorage.read(key: _syncTokenStorageKey);
+      } catch (_) {
+        syncToken = null;
+      }
+      final lastSyncMillis = preferences.getInt(_syncLastSuccessStorageKey);
       if (!mounted) return;
       setState(() {
         _entries = entries;
         _goalTarget = goal > 0 ? goal : 0;
+        _pendingSyncOperations = operations;
+        _syncVersions = versions;
+        _syncHost = preferences.getString(_syncHostStorageKey) ?? '';
+        _syncToken = syncToken ?? '';
+        _lastSuccessfulSync = lastSyncMillis == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(lastSyncMillis);
         _isLoading = false;
       });
+      _scheduleSync();
     } catch (_) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -136,11 +235,216 @@ class _SparschweinAppState extends State<SparschweinApp> {
         jsonEncode(_entries.map((entry) => entry.toJson()).toList()),
       );
       await preferences.setDouble(_goalStorageKey, _goalTarget);
+      await preferences.setString(
+        _syncOperationsStorageKey,
+        jsonEncode(_pendingSyncOperations.map((operation) => operation.toJson()).toList()),
+      );
+      await preferences.setString(
+        _syncVersionsStorageKey,
+        jsonEncode(_syncVersions.map((key, version) => MapEntry(key, version.toJson()))),
+      );
+      await preferences.setString(_syncHostStorageKey, _syncHost);
+      if (_lastSuccessfulSync != null) {
+        await preferences.setInt(
+          _syncLastSuccessStorageKey,
+          _lastSuccessfulSync!.millisecondsSinceEpoch,
+        );
+      }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Speichern fehlgeschlagen.')),
       );
+    }
+  }
+
+  bool get _syncConfigured => _syncHost.trim().isNotEmpty && _syncToken.trim().isNotEmpty;
+
+  String get _syncStatusText {
+    if (!_syncConfigured) return 'Nicht eingerichtet';
+    if (_isSyncing) return 'Synchronisierung läuft';
+    if (_syncError != null) return _syncError!;
+    if (_lastSuccessfulSync == null) {
+      return _pendingSyncOperations.isEmpty
+          ? 'Warte auf WLAN oder Ethernet'
+          : '${_pendingSyncOperations.length} Änderungen warten auf Verbindung';
+    }
+    if (_pendingSyncOperations.isNotEmpty) {
+      return '${_pendingSyncOperations.length} Änderungen warten auf Verbindung';
+    }
+    return 'Zuletzt synchronisiert ${DateFormat('d.M. HH:mm', 'de_DE').format(_lastSuccessfulSync!)}';
+  }
+
+  void _scheduleSync() {
+    if (!_syncConfigured || _isLoading) return;
+    _syncDebounce?.cancel();
+    _syncDebounce = Timer(const Duration(milliseconds: 700), () {
+      unawaited(_syncNow());
+    });
+  }
+
+  String _syncVersionKey(String entity, String recordId) => '$entity:$recordId';
+
+  void _enqueueSyncOperation(SyncOperation operation) {
+    final key = _syncVersionKey(operation.entity, operation.recordId);
+    final current = _syncVersions[key];
+    final queuedOperation = current != null && operation.modifiedAt <= current.modifiedAt
+        ? SyncOperation(
+            operationId: operation.operationId,
+            entity: operation.entity,
+            recordId: operation.recordId,
+            modifiedAt: current.modifiedAt + 1,
+            deleted: operation.deleted,
+            payload: operation.payload,
+          )
+        : operation;
+    _pendingSyncOperations = [..._pendingSyncOperations, queuedOperation];
+    _syncVersions[key] = queuedOperation.version;
+  }
+
+  void _queueUntrackedLocalData() {
+    for (final operation in _pendingSyncOperations) {
+      final key = _syncVersionKey(operation.entity, operation.recordId);
+      if (operation.version.isNewerThan(_syncVersions[key])) {
+        _syncVersions[key] = operation.version;
+      }
+    }
+    for (final entry in _entries) {
+      final key = _syncVersionKey('entry', entry.id);
+      if (_syncVersions.containsKey(key)) continue;
+      final operation = SyncOperation.create(
+        entity: 'entry',
+        recordId: entry.id,
+        deleted: false,
+        payload: Map<String, dynamic>.from(entry.toJson()),
+      );
+      _enqueueSyncOperation(operation);
+    }
+    const goalKey = 'goal:monthly';
+    if (_goalTarget > 0 && !_syncVersions.containsKey(goalKey)) {
+      _enqueueSyncOperation(
+        SyncOperation.create(
+          entity: 'goal',
+          recordId: 'monthly',
+          deleted: false,
+          payload: {'amount': _goalTarget},
+        ),
+      );
+    }
+  }
+
+  Future<void> _syncNow() async {
+    if (_isLoading || _isSyncing || !_syncConfigured) return;
+    if (!LocalSyncClient.isPrivateIpv4(_syncHost)) return;
+
+    var isLocalNetwork = false;
+    try {
+      isLocalNetwork = await LocalSyncClient.isOnLocalTransport();
+    } catch (_) {
+      isLocalNetwork = false;
+    }
+    if (!isLocalNetwork) return;
+
+    final client = LocalSyncClient(ipAddress: _syncHost, token: _syncToken);
+    var completedSync = false;
+    setState(() {
+      _isSyncing = true;
+      _syncError = null;
+      _queueUntrackedLocalData();
+    });
+    try {
+      await _saveData();
+      final batch = _pendingSyncOperations.take(200).toList();
+      final response = await client.synchronize(batch);
+      if (!mounted) return;
+      setState(() {
+        _pendingSyncOperations.removeWhere(
+          (operation) => response.acknowledgedOperationIds.contains(operation.operationId),
+        );
+        _applyRemoteRecords(response.records);
+        _lastSuccessfulSync = DateTime.now();
+        _syncError = null;
+      });
+      await _saveData();
+      completedSync = true;
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _syncError = error is SyncException
+            ? error.message
+            : 'Synchronisierung fehlgeschlagen.';
+      });
+    } finally {
+      client.close();
+      if (mounted) {
+        setState(() => _isSyncing = false);
+        if (completedSync && _pendingSyncOperations.isNotEmpty) _scheduleSync();
+      }
+    }
+  }
+
+  void _applyRemoteRecords(List<RemoteSyncRecord> records) {
+    for (final record in records) {
+      final key = _syncVersionKey(record.entity, record.recordId);
+      if (!record.version.isNewerThan(_syncVersions[key])) continue;
+      _syncVersions[key] = record.version;
+      if (record.entity == 'entry') {
+        _entries.removeWhere((entry) => entry.id == record.recordId);
+        if (!record.version.deleted && record.payload != null) {
+          _entries.add(SavingsEntry.fromJson(record.payload!));
+        }
+      } else if (record.entity == 'goal' && record.recordId == 'monthly') {
+        final amount = record.payload?['amount'];
+        _goalTarget = !record.version.deleted && amount is num && amount > 0
+            ? amount.toDouble()
+            : 0;
+      }
+    }
+    _entries.sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  Future<void> _openSyncSettings() async {
+    final result = await showDialog<SyncSettingsValue>(
+      context: context,
+      builder: (dialogContext) => SyncSettingsDialog(
+        initialIp: _syncHost,
+        initialToken: _syncToken,
+        statusText: _syncStatusText,
+        pendingCount: _pendingSyncOperations.length,
+        onClose: () => Navigator.of(dialogContext).pop(),
+        onSave: (ip, token) => Navigator.of(dialogContext).pop(
+          SyncSettingsValue(ipAddress: ip, token: token),
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    final ip = result.ipAddress.trim();
+    final token = result.token.trim();
+    if ((ip.isEmpty) != (token.isEmpty)) {
+      setState(() => _syncError = 'IP-Adresse und Token müssen beide eingetragen sein.');
+      return;
+    }
+    if (ip.isNotEmpty && !LocalSyncClient.isPrivateIpv4(ip)) {
+      setState(() => _syncError = 'Bitte eine private IPv4-Adresse eintragen.');
+      return;
+    }
+    try {
+      if (token.isEmpty) {
+        await _secureStorage.delete(key: _syncTokenStorageKey);
+      } else {
+        await _secureStorage.write(key: _syncTokenStorageKey, value: token);
+      }
+      if (!mounted) return;
+      setState(() {
+        _syncHost = ip;
+        _syncToken = token;
+        _syncError = null;
+      });
+      await _saveData();
+      _scheduleSync();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _syncError = 'Synchronisierungseinstellungen konnten nicht gespeichert werden.');
     }
   }
 
@@ -242,13 +546,32 @@ class _SparschweinAppState extends State<SparschweinApp> {
     final savedEntry = entry;
     setState(() {
       _entries = [..._entries, savedEntry]..sort((a, b) => b.date.compareTo(a.date));
+      _enqueueSyncOperation(
+        SyncOperation.create(
+          entity: 'entry',
+          recordId: savedEntry.id,
+          deleted: false,
+          payload: Map<String, dynamic>.from(savedEntry.toJson()),
+        ),
+      );
     });
     await _saveData();
+    _scheduleSync();
   }
 
   Future<void> _removeEntry(SavingsEntry entry) async {
-    setState(() => _entries.removeWhere((item) => item.id == entry.id));
+    setState(() {
+      _entries.removeWhere((item) => item.id == entry.id);
+      _enqueueSyncOperation(
+        SyncOperation.create(
+          entity: 'entry',
+          recordId: entry.id,
+          deleted: true,
+        ),
+      );
+    });
     await _saveData();
+    _scheduleSync();
   }
 
   Future<void> _editGoal() async {
@@ -309,8 +632,19 @@ class _SparschweinAppState extends State<SparschweinApp> {
     );
     controller.dispose();
     if (result == null || !mounted) return;
-    setState(() => _goalTarget = result);
+    setState(() {
+      _goalTarget = result;
+      _enqueueSyncOperation(
+        SyncOperation.create(
+          entity: 'goal',
+          recordId: 'monthly',
+          deleted: result <= 0,
+          payload: result > 0 ? {'amount': result} : null,
+        ),
+      );
+    });
     await _saveData();
+    _scheduleSync();
   }
 
   void _navigate(_AppPage page, {bool closeDrawer = false}) {
@@ -386,25 +720,12 @@ class _SparschweinAppState extends State<SparschweinApp> {
           const SizedBox(width: 11),
           const _BrandLockup(compact: true),
           const Spacer(),
-          Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [Color(0xFFECDFBC), Color(0xFFF0DCE5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: const Text(
-              'S',
-              style: TextStyle(
-                color: pinkStrongColor,
-                fontWeight: FontWeight.w800,
-                fontSize: 13,
-              ),
+          IconButton(
+            tooltip: 'Synchronisierung einstellen',
+            onPressed: _openSyncSettings,
+            icon: Icon(
+              _isSyncing ? Icons.sync_rounded : Icons.sync_alt_rounded,
+              color: _syncConfigured ? pinkStrongColor : mutedColor,
             ),
           ),
         ],
@@ -485,7 +806,16 @@ class _SparschweinAppState extends State<SparschweinApp> {
                     ],
                   ),
                 ),
-                const Icon(Icons.auto_awesome_rounded, size: 16, color: Color(0xFFCE86A0)),
+                IconButton(
+                  tooltip: 'Synchronisierung einstellen',
+                  onPressed: _openSyncSettings,
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    _isSyncing ? Icons.sync_rounded : Icons.sync_alt_rounded,
+                    size: 19,
+                    color: _syncConfigured ? pinkStrongColor : Color(0xFFCE86A0),
+                  ),
+                ),
               ],
             ),
           ],
