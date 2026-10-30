@@ -37,7 +37,6 @@ var _jumpscare: JumpscareScreen
 func _ready() -> void:
     _canvas = CanvasLayer.new()
     add_child(_canvas)
-    _canvas.screen_rect = true
     _build_hud()
     _build_pause()
     _build_jumpscare()
@@ -300,9 +299,10 @@ func _build_pause() -> void:
     cont.text = "Fortsetzen"
     cont.position = Vector2(140, 180)
     cont.size = Vector2(120, 40)
-    cont.pressed.connect(func():
+    var cb_cont := func():
         hide_pause()
-        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_CAPTURED))
+        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_CAPTURED)
+    cont.pressed.connect(cb_cont)
     panel.add_child(cont)
     _canvas.add_child(_pause)
 
@@ -340,10 +340,10 @@ func show_jumpscare() -> void:
     await get_tree().create_timer(0.5).timeout
     strobe.stop()
     _jumpscare.flash_color = Color(0, 0, 0, 1)
-    await get_tree().create_timer(0.8).timeout
+    await get_tree().create_timer(0.7).timeout
     _quit_game()
 
 func _quit_game() -> void:
     _jumpscare.flash_color = Color(0, 0, 0, 1)
-    await get_tree().create_timer(1.2).timeout
+    await get_tree().create_timer(0.5).timeout
     get_tree().quit()
