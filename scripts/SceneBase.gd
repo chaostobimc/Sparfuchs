@@ -50,14 +50,14 @@ func _build_environment() -> void:
     _env.glow_map_strength = 0.0
 
 func _build_lighting() -> void:
-    var hemi := HemisphereLight3D.new()
+    var hemi: HemisphereLight3D = HemisphereLight3D.new()
     hemi.environment = _env
     hemi.light_energy = 0.25
     hemi.sky_color = Color(0.1, 0.12, 0.14)
     hemi.ground_color = Color(0.04, 0.05, 0.04)
     add_child(hemi)
 
-    var ambient := AmbientLight3D.new()
+    var ambient: AmbientLight3D = AmbientLight3D.new()
     ambient.light_energy = 0.15
     add_child(ambient)
 

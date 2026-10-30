@@ -1,4 +1,5 @@
 extends Node3D
+class_name Door
 ## Eine Tür: physikalische Füllung (Slab) + Übergang (Portal-Logic).
 ## Die Füllung wird verschoben und ihrer Kollision entzogen, sobald
 ## `require_flag` gesetzt ist. Danach führt der Spieler in `target_scene`.

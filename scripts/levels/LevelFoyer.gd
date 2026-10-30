@@ -50,7 +50,7 @@ func _build_safe() -> void:
     add_child(safe)
 
 func _build_corridor_door() -> void:
-    var door := Door.new()
+    var door: Door = Door.new()
     door.position = Vector3(0.0, 0.0, -5.0)
     door.target_scene = "res://scenes/Corridor.tscn"
     door.act = 2
