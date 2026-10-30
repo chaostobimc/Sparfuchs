@@ -1,4 +1,5 @@
 extends Node
+class_name Thunder
 ## Perodisch Blitz + Donner. Flashing registered lights kurz auf.
 ## Registriere Lichter via `add_light(light)`.
 

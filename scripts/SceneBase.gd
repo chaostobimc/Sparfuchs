@@ -1,4 +1,5 @@
 extends Node3D
+class_name SceneBase
 ## Basis für alle Level. Baut Umgebung (Nebel, Hintergrund), Licht,
 ## den Spieler (PlayerController), Regen und Donner auf.
 ## Die konkreten Level (LevelFoyer.gd etc.) erben davon und fügen

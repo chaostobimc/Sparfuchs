@@ -1,4 +1,5 @@
 extends Node3D
+class_name Rain
 ## Prozeduraler Regen aus vielen dünnen "Strich"-Boxen.
 ## Wird als Kind des Spielers angelegt, damit er die Reihenfolge der
 ## Jumpscare-Stille später einfach steuern kann.

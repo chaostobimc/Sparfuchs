@@ -1,4 +1,5 @@
 extends Control
+class_name JumpscareScreen
 ## Vollscreen-Überlagerung für den Final-Jumpscare.
 ## Der UIManager wechselt `flash_color` in rasender Folge (Strobe).
 

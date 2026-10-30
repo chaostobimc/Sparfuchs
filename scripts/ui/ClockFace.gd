@@ -1,4 +1,5 @@
 extends Control
+class_name ClockFace
 ## Analoges Zifferblatt mit draggbarem Minutenzeiger.
 ## Die Werte `hour` (0..23) und `minute` (0..59) können auch extern gesetzt werden.
 

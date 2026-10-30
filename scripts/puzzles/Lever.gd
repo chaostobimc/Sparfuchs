@@ -1,4 +1,5 @@
 extends Interactable
+class_name Lever
 ## Ein einzelner Hebel (Lever) des Notstrom-Aggregats (Akt 2).
 ## Baut seine eigene Visualisierung und berichtet an den Eltern-Knoten
 ## (PuzzleLevers), welcher Hebel gezogen wurde.
