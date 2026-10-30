@@ -32,8 +32,8 @@ func _build() -> void:
     _display.text = "-----"
     _display.position = Vector2(40, 60)
     _display.size = Vector2(380, 60)
-    _display.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    _display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    _display.horizontal_alignment = Control.HORIZONTAL_ALIGNMENT_CENTER
+    _display.vertical_alignment = Control.VERTICAL_ALIGNMENT_CENTER
     _display.add_theme_font_size_override("font_size", 40)
     _display.add_theme_color_override("font_color", Color(0.35, 0.9, 0.5))
     _panel.add_child(_display)
