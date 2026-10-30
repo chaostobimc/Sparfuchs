@@ -1,0 +1,12 @@
+# Godot-Editor-Cache
+.godot/
+
+# Eigene Build-/Export-Produkte
+*.tmp
+*.log
+export/
+builds/
+
+# System
+.DS_Store
+Thumbs.db
