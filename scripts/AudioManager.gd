@@ -27,7 +27,7 @@ func _ready() -> void:
 func linear_to_db(v: float) -> float:
     if v <= 0.0:
         return -80.0
-    return 20.0 * log(v, 10.0)
+    return 20.0 * (log(v) / log(10.0))
 
 ## ----- Schleifen -----
 
