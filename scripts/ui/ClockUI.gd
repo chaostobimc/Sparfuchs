@@ -39,7 +39,7 @@ func _build() -> void:
     _display.text = "00:00"
     _display.position = Vector2(40, 50)
     _display.size = Vector2(340, 40)
-    _display.horizontal_alignment = Control.HORIZONTAL_ALIGNMENT_CENTER
+    _display.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     _display.add_theme_font_size_override("font_size", 26)
     _display.add_theme_color_override("font_color", Color(0.35, 0.9, 0.5))
     _panel.add_child(_display)
@@ -55,7 +55,7 @@ func _build() -> void:
     _status.text = "Ziel: 22:55  (10:55 Uhr)"
     _status.position = Vector2(30, 410)
     _status.size = Vector2(360, 30)
-    _status.horizontal_alignment = Control.HORIZONTAL_ALIGNMENT_CENTER
+    _status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     _status.add_theme_font_size_override("font_size", 14)
     _status.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
     _panel.add_child(_status)

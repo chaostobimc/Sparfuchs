@@ -66,8 +66,8 @@ func _build_hud() -> void:
 
     _prompt_label = Label.new()
     _prompt_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-    _prompt_label.horizontal_alignment = Control.HORIZONTAL_ALIGNMENT_CENTER
-    _prompt_label.vertical_alignment = Control.VERTICAL_ALIGNMENT_CENTER
+    _prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _prompt_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     _prompt_label.add_theme_font_size_override("font_size", 18)
     _prompt_label.add_theme_color_override("font_color", Color(0.95, 0.95, 0.95))
     _prompt_label.visible = false
@@ -76,8 +76,8 @@ func _build_hud() -> void:
     _note_count = Label.new()
     _note_count.text = "Notizen: 0"
     _note_count.set_anchors_preset(Control.PRESET_FULL_RECT)
-    _note_count.horizontal_alignment = Control.HORIZONTAL_ALIGNMENT_RIGHT
-    _note_count.vertical_alignment = Control.VERTICAL_ALIGNMENT_TOP
+    _note_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    _note_count.vertical_alignment = VERTICAL_ALIGNMENT_TOP
     _note_count.set_position(Vector2(-20, 20))
     _note_count.set_size(Vector2(220, 30))
     _note_count.add_theme_font_size_override("font_size", 13)
@@ -94,8 +94,8 @@ func _build_hud() -> void:
     _toast_label.text = ""
     _toast_label.position = Vector2(20, 20)
     _toast_label.size = Vector2(560, 50)
-    _toast_label.horizontal_alignment = Control.HORIZONTAL_ALIGNMENT_CENTER
-    _toast_label.vertical_alignment = Control.VERTICAL_ALIGNMENT_CENTER
+    _toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    _toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     _toast_label.add_theme_font_size_override("font_size", 18)
     _toast_label.add_theme_color_override("font_color", Color(0.95, 0.9, 0.7))
     _toast_panel.add_child(_toast_label)
@@ -205,7 +205,7 @@ func hide_note_reader() -> void:
         _note_reader.queue_free()
         _note_reader = null
     if _game_active:
-        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_LOCKED)
+        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_CAPTURED)
 
 ## Schließt das oberste offene Overlay (Uhr > Keypad > Notizen) und sperrt die Maus wieder.
 func close_top_overlay() -> void:
@@ -235,7 +235,7 @@ func hide_keypad() -> void:
         _keypad.queue_free()
         _keypad = null
     if _game_active:
-        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_LOCKED)
+        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_CAPTURED)
 
 func _on_keypad_solved(code: String) -> void:
     hide_keypad()
@@ -261,7 +261,7 @@ func hide_clock() -> void:
         _clock.queue_free()
         _clock = null
     if _game_active:
-        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_LOCKED)
+        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_CAPTURED)
 
 func _on_clock_solved() -> void:
     hide_clock()
@@ -285,14 +285,14 @@ func _build_pause() -> void:
     var title := Label.new()
     title.text = "PAUSE"
     title.position = Vector2(20, 20)
-    title.horizontal_alignment = Control.HORIZONTAL_ALIGNMENT_CENTER
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size", 30)
     title.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
     panel.add_child(title)
     var hint := Label.new()
     hint.text = "Klicke, um das Spiel fortzusetzen."
     hint.position = Vector2(20, 120)
-    hint.horizontal_alignment = Control.HORIZONTAL_ALIGNMENT_CENTER
+    hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     hint.add_theme_font_size_override("font_size", 14)
     hint.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
     panel.add_child(hint)
@@ -302,7 +302,7 @@ func _build_pause() -> void:
     cont.size = Vector2(120, 40)
     cont.pressed.connect(func():
         hide_pause()
-        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_LOCKED))
+        DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_CAPTURED))
     panel.add_child(cont)
     _canvas.add_child(_pause)
 

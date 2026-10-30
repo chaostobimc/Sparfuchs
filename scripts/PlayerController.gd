@@ -45,7 +45,7 @@ func _ready() -> void:
     AudioManager.set_rain_volume(0.5)
     AudioManager.set_ambient_volume(0.4)
     _game_started = true
-    _was_locked = DisplayServer.mouse_get_mode() == DisplayServer.MOUSE_MODE_LOCKED
+    _was_locked = DisplayServer.mouse_get_mode() == DisplayServer.MOUSE_MODE_CAPTURED
     set_process_input(true)
 
 func _build_view() -> void:
@@ -99,7 +99,7 @@ func _build_collider() -> void:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-    var locked := DisplayServer.mouse_get_mode() == DisplayServer.MOUSE_MODE_LOCKED
+    var locked := DisplayServer.mouse_get_mode() == DisplayServer.MOUSE_MODE_CAPTURED
     # Pause automatisch anzeigen, wenn der Pointer entsperrt wird
     # (aber nicht, wenn ein Overlay offen ist).
     if _game_started and _was_locked and not locked and not _pause_shown and not UIManager.any_overlay_open():
@@ -227,8 +227,8 @@ func _is_part_of(node: Node, collider: Node) -> bool:
 
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-        if DisplayServer.mouse_get_mode() != DisplayServer.MOUSE_MODE_LOCKED:
-            DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_LOCKED)
+        if DisplayServer.mouse_get_mode() != DisplayServer.MOUSE_MODE_CAPTURED:
+            DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_CAPTURED)
             _last_mouse = Input.get_mouse_position()
             _pause_shown = false
         return
